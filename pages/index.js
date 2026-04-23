@@ -41,16 +41,28 @@ export default function Home() {
     setChyba(null)
     setZprava(null)
 
-    if (jeRegistrace) {
-      const { error } = await supabase.auth.signUp({ email, password })
-      if (error) setChyba(error.message)
-      else setZprava('Registrace úspěšná! Zkontroluj si e-mail pro potvrzení (pokud máš zapnuté potvrzování).')
-    } else {
-      const { error } = await supabase.auth.signInWithPassword({ email, password })
-      if (error) setChyba(error.message)
-      else zkontrolujPrihlaseni()
+    try {
+      if (jeRegistrace) {
+        const { error } = await supabase.auth.signUp({ email, password: heslo })
+        if (error) {
+          throw error
+        } else {
+          setZprava('Registrace úspěšná! Zkontroluj si e-mail pro potvrzení (pokud máš zapnuté potvrzování).')
+          zkontrolujPrihlaseni()
+        }
+      } else {
+        const { error } = await supabase.auth.signInWithPassword({ email, password: heslo })
+        if (error) {
+          throw error
+        } else {
+          zkontrolujPrihlaseni()
+        }
+      }
+    } catch (chybaPripojeni) {
+      setChyba(chybaPripojeni.message)
+    } finally {
+      setNacitani(false)
     }
-    setNacitani(false)
   }
 
   async function odhlasitSe() {
