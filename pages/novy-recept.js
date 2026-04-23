@@ -24,6 +24,10 @@ export default function NovyRecept() {
   const [naseptavac, setNaseptavac] = useState([])
   const [nacitaniSurovin, setNacitaniSurovin] = useState(false)
 
+  // AI Kontrola
+  const [aiZprava, setAiZprava] = useState(null)
+  const [aiNacitani, setAiNacitani] = useState(false)
+
   useEffect(() => {
     const zkontrolujUzivatele = async () => {
       const { data: { session } } = await supabase.auth.getSession()
@@ -72,6 +76,44 @@ export default function NovyRecept() {
 
   const upravSurovinu = (id, pole, hodnota) => {
     setVybraneSuroviny(vybraneSuroviny.map(s => s.id === id ? { ...s, [pole]: hodnota } : s))
+  }
+
+  async function zkontrolujPomociAI() {
+    if (!title || !instructions) {
+      alert('Nejprve vyplň název a postup, aby měla umělá inteligence co kontrolovat.')
+      return
+    }
+    
+    setAiNacitani(true)
+    setAiZprava(null)
+
+    const seznamSurovinText = vybraneSuroviny.map(s => `${s.mnozstvi} ${s.jednotka} ${s.origfdnm}`).join(', ')
+    const prompt = `Jsi profesionální kuchař. Zkontroluj tento recept, jestli dává kuchařský smysl, zda nechybí důležitá surovina a jestli je postup logický. Odpověz stručně, přátelsky a česky.\n\nNázev: ${title}\nPopis: ${description}\nSuroviny: ${seznamSurovinText}\nPostup: ${instructions}`
+
+    try {
+      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${process.env.NEXT_PUBLIC_OPENROUTER_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: 'openai/gpt-4o-mini', // Zde můžeš model z OpenRouteru libovolně změnit
+          messages: [{ role: 'user', content: prompt }]
+        })
+      })
+
+      const data = await response.json()
+      if (data.choices && data.choices.length > 0) {
+        setAiZprava(data.choices[0].message.content)
+      } else {
+        setAiZprava('Nepodařilo se získat odpověď. Zkontroluj si prosím nastavení API klíče.')
+      }
+    } catch (error) {
+      setAiZprava('Chyba při komunikaci: ' + error.message)
+    } finally {
+      setAiNacitani(false)
+    }
   }
 
   async function ulozRecept(e) {
@@ -211,6 +253,28 @@ export default function NovyRecept() {
           style={{ padding: '12px', height: '200px', borderRadius: '8px', border: '1px solid #ddd' }}
           required
         />
+
+        {/* Sekce pro AI Kontrolu */}
+        <div style={{ backgroundColor: '#ebf5fb', padding: '20px', borderRadius: '12px', border: '1px solid #3498db' }}>
+          <h3 style={{ marginTop: 0, color: '#2980b9' }}>Inteligentní kontrola receptu</h3>
+          <p style={{ fontSize: '14px', color: '#555', marginBottom: '15px' }}>Než recept odešleš, nech našeho AI šéfkuchaře zkontrolovat, jestli v postupu něco nechybí nebo jestli množství surovin dává smysl.</p>
+          
+          <button 
+            type="button" 
+            onClick={zkontrolujPomociAI} 
+            disabled={aiNacitani}
+            style={{ padding: '10px 20px', backgroundColor: '#3498db', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}
+          >
+            {aiNacitani ? 'AI analyzuje tvůj recept...' : 'Zkontrolovat pomocí AI'}
+          </button>
+
+          {aiZprava && (
+            <div style={{ marginTop: '15px', padding: '15px', backgroundColor: 'white', borderRadius: '8px', border: '1px dashed #3498db', fontSize: '14px', lineHeight: '1.5' }}>
+              <strong>Zpětná vazba:</strong><br />
+              {aiZprava}
+            </div>
+          )}
+        </div>
 
         <button type="submit" style={{ padding: '15px', backgroundColor: '#2ecc71', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '18px', fontWeight: 'bold' }}>
           Odeslat recept ke schválení
