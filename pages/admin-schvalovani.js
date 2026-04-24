@@ -12,7 +12,6 @@ export default function AdminSchvalovani() {
   const [recepty, setRecepty] = useState([])
   const [nacitani, setNacitani] = useState(true)
 
-  // Stavy pro vyhledávač surovin v administraci
   const [hledanyText, setHledanyText] = useState('')
   const [naseptavac, setNaseptavac] = useState([])
   const [aktivniReceptId, setAktivniReceptId] = useState(null)
@@ -33,7 +32,6 @@ export default function AdminSchvalovani() {
     setNacitani(true)
     const { data } = await supabase
       .from('recipes')
-      // Nově načítáme i ingredient_id pro možnost ukládání a úprav
       .select(`*, recipe_ingredients (id, amount, unit, ingredient_id, ingredients (id, origfdnm))`)
       .eq('status', 'AI') 
       .order('created_at', { ascending: true })
@@ -41,7 +39,6 @@ export default function AdminSchvalovani() {
     setNacitani(false)
   }
 
-  // --- LOGIKA PRO HLEDÁNÍ SUROVIN ---
   useEffect(() => {
     const hledejSuroviny = async () => {
       if (hledanyText.length < 2) { setNaseptavac([]); return; }
@@ -104,7 +101,6 @@ export default function AdminSchvalovani() {
   async function zpracujRecept(id, novyStatus) {
     const r = recepty.find(re => re.id === id)
     
-    // 1. Uložíme textové změny receptu
     const { error: chybaReceptu } = await supabase.from('recipes').update({ 
       status: novyStatus, 
       title: r.title, 
@@ -117,12 +113,8 @@ export default function AdminSchvalovani() {
       return
     }
 
-    // 2. Pokud schvalujeme, přepíšeme seznam surovin podle aktuální editace
     if (novyStatus === 'AD') {
-      // Smažeme původní spojení
       await supabase.from('recipe_ingredients').delete().eq('recipe_id', id)
-      
-      // Vytvoříme nová spojení
       if (r.recipe_ingredients.length > 0) {
         const noveSurovinyKVlozeni = r.recipe_ingredients.map(ing => ({
           recipe_id: id,
@@ -133,7 +125,6 @@ export default function AdminSchvalovani() {
         await supabase.from('recipe_ingredients').insert(noveSurovinyKVlozeni)
       }
     }
-
     setRecepty(recepty.filter(re => re.id !== id))
   }
 
@@ -183,14 +174,13 @@ export default function AdminSchvalovani() {
                 style={{ width: '100%', padding: '10px', fontSize: '20px', fontWeight: 'bold', marginBottom: '15px', borderRadius: '6px', border: '1px solid #eee' }}
               />
 
-              <label style={{ display: 'block', fontSize: '12px', color: '#999', marginBottom: '5px' }}>Krátký popis</label>
+              <label style={{ display: 'block', fontSize: '12px', color: '#999', marginBottom: '5px' }}>Krátký popis (vygenerováno AI, pokud uživatel nezadal)</label>
               <textarea 
                 value={recept.description || ''} 
                 onChange={(e) => upravTextReceptu(recept.id, 'description', e.target.value)}
                 style={{ width: '100%', padding: '10px', height: '60px', marginBottom: '15px', borderRadius: '6px', border: '1px solid #eee' }}
               />
 
-              {/* EDITOR SUROVIN V ADMINISTRACI */}
               <div style={{ backgroundColor: '#fdf2e9', padding: '15px', borderRadius: '8px', marginBottom: '15px', border: '1px solid #f8c471' }}>
                 <h4 style={{ marginTop: 0, color: '#d35400' }}>Suroviny k uložení do databáze:</h4>
                 
@@ -246,7 +236,7 @@ export default function AdminSchvalovani() {
                 </div>
               </div>
 
-              <label style={{ display: 'block', fontSize: '12px', color: '#999', marginBottom: '5px' }}>Pracovní postup</label>
+              <label style={{ display: 'block', fontSize: '12px', color: '#999', marginBottom: '5px' }}>Pracovní postup (čistý text bez ingrediencí)</label>
               <textarea 
                 value={recept.instructions} 
                 onChange={(e) => upravTextReceptu(recept.id, 'instructions', e.target.value)}
