@@ -82,9 +82,23 @@ export default function NovyRecept() {
 
     let aiFeedback = ""
     let aiInstructions = ""
+    let finalDescription = description
+
     try {
-      const prompt = `Jsi šéfkuchař. Uživatel posílá recept pro ${servings} osoby. Doplň chybějící suroviny, které jsou v postupu, ale nejsou v seznamu. Oprav gramatiku a strukturu. 
-      Vrať POUZE JSON: {"feedback": "co jsi doplnil a opravil", "improved_instructions": "kompletní vymazlený postup včetně přehledného seznamu surovin s gramážemi na začátku"}`
+      const prompt = `Jsi profesionální šéfkuchař. Uživatel posílá recept pro ${servings} osoby.
+      ÚKOLY:
+      1. Zkontroluj postup a oprav gramatiku.
+      2. Vypiš suroviny, které v seznamu chybí, ale v postupu se o nich píše.
+      3. Vymysli lákavý krátký popis jídla (max 2 věty).
+      4. NIKDY nepiš seznam surovin do vylepšeného postupu. Postup musí obsahovat POUZE kroky přípravy.
+
+      Vrať POUZE striktní JSON objekt v tomto formátu:
+      {
+        "feedback": "co jsi opravil a doplnil",
+        "missing_ingredients": "seznam chybějících surovin s množstvím (např. vejce 2 ks, sůl 1 špetka), nebo napiš 'nic nechybí'",
+        "short_description": "lákavý popis jídla",
+        "improved_instructions": "čistý postup krok za krokem BEZ seznamu surovin"
+      }`
       
       const seznamSurovinText = vybraneSuroviny.map(s => `${s.mnozstvi} ${s.jednotka} ${s.origfdnm}`).join(', ')
 
@@ -93,14 +107,21 @@ export default function NovyRecept() {
         headers: { 'Authorization': `Bearer ${process.env.NEXT_PUBLIC_OPENROUTER_API_KEY}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model: 'openai/gpt-4o-mini',
-          messages: [{ role: 'user', content: `${prompt} \nNázev: ${title}, Suroviny: ${seznamSurovinText}, Postup: ${instructions}` }],
+          messages: [{ role: 'user', content: `${prompt} \n\nNázev: ${title}\nSuroviny: ${seznamSurovinText}\nPostup: ${instructions}` }],
           response_format: { type: "json_object" }
         })
       })
       const res = await response.json()
       const ai = JSON.parse(res.choices[0].message.content)
-      aiFeedback = ai.feedback
+      
+      aiFeedback = `Zpětná vazba: ${ai.feedback}\n\nCHYBĚJÍCÍ SUROVINY K DOPLNĚNÍ:\n${ai.missing_ingredients}`
       aiInstructions = ai.improved_instructions
+      
+      // Pokud uživatel nezadal popis, použijeme ten od AI
+      if (!finalDescription || finalDescription.trim() === '') {
+        finalDescription = ai.short_description
+      }
+
     } catch (err) { 
       console.error(err)
       aiFeedback = "AI kontrola dočasně nedostupná."
@@ -109,7 +130,7 @@ export default function NovyRecept() {
 
     const { data: recept, error: receptError } = await supabase.from('recipes').insert([{
       title, 
-      description, 
+      description: finalDescription, 
       instructions, 
       cooking_time_minutes: cookingTime,
       difficulty,
@@ -138,7 +159,7 @@ export default function NovyRecept() {
       <form onSubmit={ulozRecept} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
         <input type="text" placeholder="Název jídla" value={title} onChange={e => setTitle(e.target.value)} style={{ padding: '12px', borderRadius: '8px', border: '1px solid #ddd', fontSize: '18px' }} required />
         
-        <textarea placeholder="Krátký popis jídla" value={description} onChange={(e) => setDescription(e.target.value)} style={{ padding: '12px', height: '80px', borderRadius: '8px', border: '1px solid #ddd' }} />
+        <textarea placeholder="Krátký popis jídla (pokud nevyplníš, AI ho doplní za tebe)" value={description} onChange={(e) => setDescription(e.target.value)} style={{ padding: '12px', height: '80px', borderRadius: '8px', border: '1px solid #ddd' }} />
 
         <div style={{ display: 'flex', gap: '20px' }}>
           <div style={{ flex: 1 }}>
